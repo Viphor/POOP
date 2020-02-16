@@ -10,5 +10,6 @@ default = ["parser-debug"]
 parser-debug = ["backtrace"]
 
 [dependencies]
+llvm-sys = "90.0.0"
 logos = { version = "0.10.0-RC2" }
 backtrace = { version = "0.3.40", optional = true }
