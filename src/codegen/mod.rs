@@ -112,8 +112,8 @@ impl Codegen {
                     self.build_expression(*right),
                     to_cstring(&format!("sub.{}", self.counter)).as_ptr() as *const _,
                 ),
-                Expression::Modulus(left, right) => unimplemented!(),
-                Expression::Equality(left, right) => unimplemented!(),
+                Expression::Modulus(_left, _right) => unimplemented!(),
+                Expression::Equality(_left, _right) => unimplemented!(),
                 Expression::Value(value) => match value {
                     Value::Literal(Literal::Number(Number::Int(int))) => {
                         LLVMConstInt(Types::Int.to_llvm(self.context), int as u64, 1)
