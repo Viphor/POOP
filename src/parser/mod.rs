@@ -41,7 +41,7 @@
 //!              |  EXPRESSION
 //!              |  VAR_DECL
 //!              ;
-//!              
+//!
 //! (* Note: This is going to be evaluated using Pratt parsing
 //!    therefore allowing left recursion *)
 //! EXPRESSION   := EXPRESSION Plus EXPRESSION

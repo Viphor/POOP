@@ -1,3 +1,4 @@
+#[derive(Debug)]
 pub struct CodegenError {
     message: String,
 }
@@ -11,5 +12,9 @@ impl CodegenError {
 
     pub fn error<T: Into<String>>(message: T) -> Self {
         Self::new(message)
+    }
+
+    pub fn message(&self) -> &str {
+        &self.message
     }
 }

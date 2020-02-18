@@ -8,7 +8,7 @@ fn expression_precedence_multiplication_last_test() {
     let mut parser = Parser::new(lexer);
     let expression = parser.expression(0);
 
-    let expected = Expression::Plus(
+    let expected = Expression::Addition(
         ExpressionContainer::new(Expression::Value(Value::Literal(Literal::Number(
             Number::Int(3),
         )))),
@@ -32,7 +32,7 @@ fn expression_precedence_multiplication_first_test() {
     let mut parser = Parser::new(lexer);
     let expression = parser.expression(0);
 
-    let expected = Expression::Plus(
+    let expected = Expression::Addition(
         ExpressionContainer::new(Expression::Multiplication(
             ExpressionContainer::new(Expression::Value(Value::Literal(Literal::Number(
                 Number::Int(3),
@@ -60,7 +60,7 @@ fn expression_precedence_parentheses_test() {
         ExpressionContainer::new(Expression::Value(Value::Literal(Literal::Number(
             Number::Int(3),
         )))),
-        ExpressionContainer::new(Expression::Plus(
+        ExpressionContainer::new(Expression::Addition(
             ExpressionContainer::new(Expression::Value(Value::Literal(Literal::Number(
                 Number::Int(4),
             )))),
@@ -122,7 +122,7 @@ fn expression_precedence_modulus_first_test() {
         ExpressionContainer::new(Expression::Value(Value::Literal(Literal::Number(
             Number::Int(3),
         )))),
-        ExpressionContainer::new(Expression::Plus(
+        ExpressionContainer::new(Expression::Addition(
             ExpressionContainer::new(Expression::Value(Value::Literal(Literal::Number(
                 Number::Int(4),
             )))),
@@ -143,7 +143,7 @@ fn expression_precedence_modulus_last_test() {
     let expression = parser.expression(0);
 
     let expected = Expression::Modulus(
-        ExpressionContainer::new(Expression::Plus(
+        ExpressionContainer::new(Expression::Addition(
             ExpressionContainer::new(Expression::Value(Value::Literal(Literal::Number(
                 Number::Int(3),
             )))),

@@ -10,8 +10,8 @@ pub type ExpressionContainer = Box<Expression>;
 
 #[derive(Debug, PartialEq)]
 pub enum Expression {
-    Plus(ExpressionContainer, ExpressionContainer),
-    Minus(ExpressionContainer, ExpressionContainer),
+    Addition(ExpressionContainer, ExpressionContainer),
+    Subtraction(ExpressionContainer, ExpressionContainer),
     Multiplication(ExpressionContainer, ExpressionContainer),
     Division(ExpressionContainer, ExpressionContainer),
     Modulus(ExpressionContainer, ExpressionContainer),
@@ -54,8 +54,8 @@ impl Expression {
     /// context.
     pub fn led(left: Expression, token: Token, right: Expression) -> Output<Expression> {
         match token {
-            Token::Plus => Ok(Expression::Plus(Box::new(left), Box::new(right))),
-            Token::Minus => Ok(Expression::Minus(Box::new(left), Box::new(right))),
+            Token::Plus => Ok(Expression::Addition(Box::new(left), Box::new(right))),
+            Token::Minus => Ok(Expression::Subtraction(Box::new(left), Box::new(right))),
             Token::Star => Ok(Expression::Multiplication(Box::new(left), Box::new(right))),
             Token::Slash => Ok(Expression::Division(Box::new(left), Box::new(right))),
             Token::Percent => Ok(Expression::Modulus(Box::new(left), Box::new(right))),

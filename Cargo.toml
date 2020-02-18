@@ -13,3 +13,6 @@ parser-debug = ["backtrace"]
 llvm-sys = "90.0.0"
 logos = { version = "0.10.0-RC2" }
 backtrace = { version = "0.3.40", optional = true }
+
+[dev-dependencies]
+cargo-husky = { version = "1", default-features = false, features = ["precommit-hook", "run-cargo-test", "run-cargo-clippy", "run-cargo-fmt"] }
