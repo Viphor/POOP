@@ -1,126 +1,90 @@
 use crate::parser::ast::*;
+#[cfg(feature = "codegen-debug")]
+use llvm::analysis::*;
 use llvm::core::*;
 use llvm::prelude::*;
 use std::ffi::CString;
+use std::os::raw::c_uint;
 
 pub mod error;
+pub mod module;
+mod traits;
 pub mod types;
 
+use traits::Builder;
 use types::Types;
-
-//type Output<Out = ()> = Result<Out, error::CodegenError>;
 
 pub struct Codegen {
     context: LLVMContextRef,
-    module: LLVMModuleRef,
+    module: module::Module,
     builder: LLVMBuilderRef,
-    counter: usize,
 }
 
 impl Codegen {
-    pub fn new<T: Into<CString>>(module_name: T) -> Self {
+    pub fn new(module_name: &str) -> Self {
         unsafe {
             let context = LLVMContextCreate();
             Self::new_with_context(context, module_name)
         }
     }
 
-    pub fn new_with_context<T: Into<CString>>(context: LLVMContextRef, module_name: T) -> Self {
+    pub fn new_with_context(context: LLVMContextRef, module_name: &str) -> Self {
         unsafe {
-            let module = LLVMModuleCreateWithNameInContext(
-                // This might break, as the string goes out of scope, and gets deallocated
-                // when this scope ends, and might need to be used inside LLVM.
-                module_name.into().as_ptr() as *const _,
-                context,
-            );
+            let module = module::Module::new(context, module_name);
             let builder = LLVMCreateBuilderInContext(context);
 
             Self {
                 context,
                 module,
                 builder,
-                counter: 0,
             }
         }
     }
 
-    fn build_function<T: Into<CString>>(
-        &mut self,
-        function_name: T,
-        function_type: &Types,
-    ) -> LLVMValueRef {
-        unsafe {
-            LLVMAddFunction(
-                self.module,
-                function_name.into().as_ptr() as *const _,
-                function_type.to_llvm(self.context),
-            )
-        }
+    pub fn module(&self) -> &module::Module {
+        &self.module
     }
 
-    fn build_basic_block<T: Into<CString>>(
-        &mut self,
-        block_name: T,
-        function: LLVMValueRef,
-    ) -> LLVMBasicBlockRef {
-        unsafe {
-            LLVMAppendBasicBlockInContext(
-                self.context,
-                function,
-                block_name.into().as_ptr() as *const _,
-            )
-        }
+    pub fn module_mut(&mut self) -> &mut module::Module {
+        &mut self.module
     }
 
-    fn position_at_block(&mut self, basic_block: LLVMBasicBlockRef) {
-        unsafe {
-            LLVMPositionBuilderAtEnd(self.builder, basic_block);
-        }
-    }
-
-    pub fn build_main(&mut self) {
-        let ft = Types::Func(Box::new(Types::Int), Vec::new());
-        let func = self.build_function(to_cstring("main"), &ft);
-        let bb = self.build_basic_block(to_cstring("entry"), func);
-        self.position_at_block(bb);
-    }
-
-    pub fn build_expression(&mut self, expr: Expression) -> LLVMValueRef {
+    pub fn build_expression(&mut self, expr: &Expression) -> LLVMValueRef {
         unsafe {
             match expr {
                 Expression::Addition(left, right) => LLVMBuildAdd(
                     self.builder,
-                    self.build_expression(*left),
-                    self.build_expression(*right),
-                    to_cstring(&format!("sum.{}", self.counter)).as_ptr() as *const _,
+                    self.build_expression(left),
+                    self.build_expression(right),
+                    self.module.empty_string(),
                 ),
                 Expression::Subtraction(left, right) => LLVMBuildSub(
                     self.builder,
-                    self.build_expression(*left),
-                    self.build_expression(*right),
-                    to_cstring(&format!("sub.{}", self.counter)).as_ptr() as *const _,
+                    self.build_expression(left),
+                    self.build_expression(right),
+                    self.module.empty_string(),
                 ),
                 Expression::Multiplication(left, right) => LLVMBuildMul(
                     self.builder,
-                    self.build_expression(*left),
-                    self.build_expression(*right),
-                    to_cstring(&format!("sub.{}", self.counter)).as_ptr() as *const _,
+                    self.build_expression(left),
+                    self.build_expression(right),
+                    self.module.empty_string(),
                 ),
                 Expression::Division(left, right) => LLVMBuildSDiv(
                     self.builder,
-                    self.build_expression(*left),
-                    self.build_expression(*right),
-                    to_cstring(&format!("sub.{}", self.counter)).as_ptr() as *const _,
+                    self.build_expression(left),
+                    self.build_expression(right),
+                    self.module.empty_string(),
                 ),
                 Expression::Modulus(_left, _right) => unimplemented!(),
                 Expression::Equality(_left, _right) => unimplemented!(),
                 Expression::Value(value) => match value {
                     Value::Literal(Literal::Number(Number::Int(int))) => {
-                        LLVMConstInt(Types::Int.to_llvm(self.context), int as u64, 1)
+                        LLVMConstInt(Types::Int.to_llvm(self.context), *int as u64, 1)
                     }
                     Value::Literal(Literal::Boolean(boolean)) => LLVMConstInt(
                         Types::Bool.to_llvm(self.context),
-                        if boolean { 1 } else { 0 },
+                        if *boolean { 1 } else { 0 },
                         0,
                     ),
                     _ => panic!("Not yet implemented!"),
@@ -130,17 +94,54 @@ impl Codegen {
     }
 
     /// TEMPORARY! Please delete!
-    pub fn build_program(&mut self, expr: Expression) {
-        self.build_main();
-        let value = self.build_expression(expr);
+    pub fn build_program(&mut self, expr: Expression) -> LLVMValueRef {
+        self.build_function("printf", Types::printf(), &|_, _| {});
+        let ft = Types::Func(Box::new(Types::Int), Vec::new(), false);
+        self.build_function("expr", ft, &|codegen, func: &LLVMValueRef| {
+            let bb = codegen.build_basic_block("entry", *func);
+            codegen.position_at_block(bb);
+            let value = codegen.build_expression(&expr);
+            codegen.build_ret(value);
+        });
+
+        let main = self.build_function("main", Types::main(), &|codegen, func| {
+            let bb = codegen.build_basic_block("entry", *func);
+            codegen.position_at_block(bb);
+            let format = codegen.build_heap_string("Result of expr: %d\n");
+            let output = codegen.build_function_call("expr", &mut [], "");
+            codegen.build_function_call("printf", &mut [format, output], "bar");
+            let ret = codegen.build_const_int(0);
+            codegen.build_ret(ret);
+        });
+
+        #[cfg(feature = "codegen-debug")]
+        {
+            unsafe {
+                LLVMDumpModule(self.module.module);
+            }
+        }
+        main
+    }
+}
+
+impl Drop for Codegen {
+    fn drop(&mut self) {
         unsafe {
-            LLVMBuildRet(self.builder, value);
             LLVMDisposeBuilder(self.builder);
-            LLVMDumpModule(self.module);
+            LLVMContextDispose(self.context);
         }
     }
 }
 
 fn to_cstring(input: &str) -> CString {
     CString::new(input).expect("CString::new failed")
+}
+
+fn to_ptr(input: &str) -> *const i8 {
+    to_cstring(input).as_ptr() as *const _
+}
+
+#[cfg(feature = "codegen-debug")]
+fn verify_fn(func: LLVMValueRef) -> bool {
+    unsafe { LLVMVerifyFunction(func, LLVMVerifierFailureAction::LLVMPrintMessageAction) != 0 }
 }
