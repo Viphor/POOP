@@ -7,6 +7,7 @@ pub enum Types {
     Bool,
     Char,
     String,
+    Void,
     Array(Box<Types>, c_uint),
     Func(Box<Types>, Vec<Types>, bool),
 }
@@ -19,6 +20,7 @@ impl Types {
                 Types::Bool => LLVMInt8TypeInContext(context),
                 Types::Char => LLVMInt8TypeInContext(context),
                 Types::String => LLVMPointerType(Types::Char.to_llvm(context), 0),
+                Types::Void => LLVMVoidType(),
                 Types::Array(element_type, count) => {
                     LLVMArrayType(element_type.to_llvm(context), *count)
                 }

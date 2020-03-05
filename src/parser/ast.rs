@@ -3,8 +3,47 @@ use super::Output;
 use super::Parser;
 use super::Source;
 use super::Token;
-use logos::source::Slice;
+use std::ops::Deref;
 use std::str;
+
+#[derive(Debug, PartialEq)]
+pub enum Statement {
+    VarDecl(VarDecl),
+    Expression(Expression),
+    Empty,
+}
+
+#[derive(Debug, PartialEq)]
+pub struct Block(Vec<Statement>);
+
+impl Block {
+    pub fn new(statements: Vec<Statement>) -> Self {
+        Self(statements)
+    }
+}
+
+impl Deref for Block {
+    type Target = Vec<Statement>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+#[derive(Debug, PartialEq)]
+pub struct VarDecl {
+    pub identifier: String,
+    pub expression: Expression,
+}
+
+impl VarDecl {
+    pub fn new(identifier: String, expression: Expression) -> Self {
+        Self {
+            identifier,
+            expression,
+        }
+    }
+}
 
 pub type ExpressionContainer = Box<Expression>;
 
@@ -16,6 +55,7 @@ pub enum Expression {
     Division(ExpressionContainer, ExpressionContainer),
     Modulus(ExpressionContainer, ExpressionContainer),
     Equality(ExpressionContainer, ExpressionContainer),
+    Block(Block),
     Value(Value),
 }
 
@@ -28,15 +68,18 @@ impl Expression {
     {
         if let Some(token_item) = parser.lexer.peek() {
             match token_item.token {
-                Token::Minus | Token::Int | Token::True | Token::False => {
-                    Ok(Expression::Value(parser.into()))
+                Token::Ident | Token::Minus | Token::Int | Token::True | Token::False => {
+                    let res = Ok(Expression::Value(parser.into()));
+                    parser.next_token();
+                    res
                 }
                 Token::LParen => {
-                    parser.next_token();
+                    parser.expect_token(Token::LParen)?;
                     let expr = parser.expression(0);
                     parser.expect_token(Token::RParen)?;
                     expr
                 }
+                Token::LBrace => Ok(Expression::Block(parser.block()?)),
                 _ => Err(ParserError::error(
                     format!(
                         "Expected: number or boolean, found: {:?}",
@@ -79,6 +122,7 @@ impl Expression {
 #[derive(Debug, PartialEq)]
 pub enum Value {
     Literal(Literal),
+    Variable(String),
 }
 
 impl<Source> From<&mut Parser<Source>> for Value
@@ -91,6 +135,7 @@ where
                 Token::Minus | Token::Int | Token::True | Token::False => {
                     Value::Literal(parser.into())
                 }
+                Token::Ident => Value::Variable(String::from(token_item.slice())),
                 _ => panic!("Expected: number or boolean in parsing of Value"),
             }
         } else {

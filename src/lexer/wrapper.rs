@@ -1,6 +1,6 @@
 use super::Token;
 pub use logos::source::WithSource;
-pub use logos::{Lexer, Logos, Source};
+pub use logos::{Lexer, Logos, Slice, Source};
 use std::fmt;
 pub use std::ops::Range;
 use std::ops::{Deref, DerefMut};
@@ -64,10 +64,13 @@ where
 
     /// Get a string slice of the current token.
     #[inline]
-    pub fn slice(&self) -> Source::Slice {
+    pub fn slice(&self) -> &'source str {
         unsafe {
-            self.source
-                .slice_unchecked(self.token_start..self.token_end)
+            std::str::from_utf8_unchecked(
+                self.source
+                    .slice_unchecked(self.token_start..self.token_end)
+                    .as_bytes(),
+            )
         }
     }
 }
