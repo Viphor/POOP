@@ -1,6 +1,7 @@
 #[cfg(feature = "parser-debug")]
 use backtrace::Backtrace;
 
+use super::{Token, Tokens};
 use std::fmt;
 use std::ops::Range;
 
@@ -29,6 +30,14 @@ impl ParserError {
 
     pub fn error<T: Into<String>>(message: T, position: Range<usize>) -> ParserError {
         ParserError::new(message, ParserErrorCode::E9999, position)
+    }
+
+    pub fn expected(expected: Vec<Token>, found: Token, position: Range<usize>) -> ParserError {
+        ParserError::new(
+            format!("Expected {}, found: {}", Tokens::from(expected), found),
+            ParserErrorCode::E0002,
+            position,
+        )
     }
 
     pub fn message(&self) -> &str {
@@ -61,6 +70,8 @@ impl fmt::Debug for ParserError {
 pub enum ParserErrorCode {
     /// Unused
     E0001,
+    /// Expected another symbol
+    E0002,
     /// Unspecified error (i.e. lazy developer)
     E9999,
 }

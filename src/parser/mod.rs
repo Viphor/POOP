@@ -55,7 +55,7 @@
 //!               ;
 //!
 //! VALUE         := LITERAL
-//!               |  FUNCTION_CALL
+//!               |  Ident LParen ARG_LIST RParen
 //!               |  Ident
 //!               ;
 //!
@@ -63,12 +63,17 @@
 //!               |  True
 //!               |  False
 //!               ;
+//!
+//! ARG_LIST      := EXPRESSION [ Comma, ARG_LIST ]
+//!               |  λ
+//!               ;
 //! ```
 
-use super::lexer::{wrapper::LexerWrapper, Token};
+use super::lexer::{wrapper::LexerWrapper, Token, Tokens};
 use logos::source::Source;
 use std::iter::Peekable;
 use std::ops::Range;
+use std::str;
 
 pub mod ast;
 pub mod error;
@@ -99,26 +104,117 @@ where
         }
     }
 
-    pub fn parse(&mut self) -> Output<ast::Statement> {
-        if let Some(token_item) = self.lexer.peek() {
-            match token_item.token {
-                Token::Let
-                | Token::LBrace
-                | Token::LParen
-                | Token::Minus
-                | Token::Int
-                | Token::True
-                | Token::False => self.statement(),
-                _ => Err(error::ParserError::error(
-                    "Unsupported token.",
-                    self.range.clone(),
-                )),
-            }
-        } else {
-            Err(error::ParserError::error(
-                "Noop. Should be fixed",
+    pub fn parse(&mut self) -> Output<ast::Program> {
+        self.program()
+        //if let Some(token_item) = self.lexer.peek() {
+        //    match token_item.token {
+        //        Token::Let
+        //        | Token::LBrace
+        //        | Token::LParen
+        //        | Token::Minus
+        //        | Token::Int
+        //        | Token::True
+        //        | Token::False => self.statement(),
+        //        _ => Err(error::ParserError::error(
+        //            "Unsupported token.",
+        //            self.range.clone(),
+        //        )),
+        //    }
+        //} else {
+        //    Err(error::ParserError::error(
+        //        "Noop. Should be fixed",
+        //        self.range.clone(),
+        //    ))
+        //}
+    }
+
+    fn program(&mut self) -> Output<ast::Program> {
+        match self.peek_token() {
+            Token::Fn | Token::Let => Ok(ast::Program::Decl(
+                self.decl()?,
+                ast::ProgramContainer::new({ self.program()? }),
+            )),
+            Token::End => Ok(ast::Program::Empty),
+            token => Err(error::ParserError::expected(
+                vec![Token::Fn, Token::Let, Token::End],
+                token,
                 self.range.clone(),
-            ))
+            )),
+        }
+    }
+
+    fn decl(&mut self) -> Output<ast::Decl> {
+        match self.peek_token() {
+            Token::Fn => Ok(ast::Decl::FuncDecl(self.func_decl()?)),
+            Token::Let => {
+                let res = ast::Decl::VarDecl(self.var_decl()?);
+                self.expect_token(Token::Semicolon)?;
+                Ok(res)
+            }
+            token => Err(error::ParserError::expected(
+                vec![Token::Fn, Token::Let],
+                token,
+                self.range.clone(),
+            )),
+        }
+    }
+
+    fn func_decl(&mut self) -> Output<ast::FuncDecl> {
+        self.expect_token(Token::Fn)?;
+        self.expect_token(Token::Ident)?;
+        let name = self.slice;
+        self.expect_token(Token::LParen)?;
+        let args = self.arg_decls()?;
+        self.expect_token(Token::RParen)?;
+        let return_type = if let Token::Arrow = self.peek_token() {
+            self.next_token();
+            self.type_decl()?
+        } else {
+            ast::Type::Void
+        };
+        let body = self.block()?;
+
+        Ok(ast::FuncDecl::new(name, args, return_type, body))
+    }
+
+    fn arg_decls(&mut self) -> Output<Vec<ast::ArgDecl>> {
+        let mut list = Vec::new();
+        while let Token::Ident = self.peek_token() {
+            self.next_token();
+            let name = self.slice;
+            self.expect_token(Token::Colon)?;
+            let arg_type = self.type_decl()?;
+            list.push(ast::ArgDecl::new(name, arg_type));
+            if let Token::Comma = self.peek_token() {
+                self.next_token();
+            } else {
+                break;
+            }
+        }
+
+        Ok(list)
+    }
+
+    fn type_decl(&mut self) -> Output<ast::Type> {
+        match self.next_token() {
+            Token::IntType => Ok(ast::Type::Int),
+            Token::FloatType => Ok(ast::Type::Float),
+            Token::DoubleType => Ok(ast::Type::Double),
+            Token::BooleanType => Ok(ast::Type::Boolean),
+            Token::VoidType => Ok(ast::Type::Void),
+            Token::Ident => Ok(ast::Type::UserDefined(String::from(self.slice))),
+            token => Err(error::ParserError::expected(
+                vec![
+                    Token::IntType,
+                    Token::FloatType,
+                    Token::DoubleType,
+                    Token::BooleanType,
+                    Token::VoidType,
+                    Token::Ident,
+                ],
+                token,
+                self.range.clone(),
+            )),
         }
     }
 
@@ -155,6 +251,7 @@ where
             | Token::Minus
             | Token::Ident
             | Token::Int
+            | Token::String
             | Token::True
             | Token::False => Ok(ast::Statement::Expression(self.expression(0)?)),
             Token::RBrace => Ok(ast::Statement::Empty),
@@ -215,6 +312,88 @@ where
         Ok(left)
     }
 
+    fn value(&mut self) -> Output<ast::Value> {
+        match self.next_token() {
+            token @ Token::Minus
+            | token @ Token::Int
+            | token @ Token::String
+            | token @ Token::True
+            | token @ Token::False => Ok(ast::Value::Literal(self.literal(token)?)),
+            Token::Ident => {
+                if let Token::LParen = self.peek_token() {
+                    let identifier = self.slice;
+                    self.expect_token(Token::LParen)?;
+                    let mut arguments = Vec::new();
+                    while match self.peek_token() {
+                        Token::RParen => false,
+                        Token::Comma => {
+                            self.next_token();
+                            true
+                        }
+                        _ => true,
+                    } {
+                        arguments.push(self.expression(0)?);
+                    }
+                    self.expect_token(Token::RParen)?;
+                    Ok(ast::Value::FunctionCall(ast::FunctionCall::new(
+                        identifier, arguments,
+                    )))
+                } else {
+                    Ok(ast::Value::Variable(String::from(self.slice)))
+                }
+            }
+            token => Err(error::ParserError::expected(
+                vec![
+                    Token::Minus,
+                    Token::Int,
+                    Token::True,
+                    Token::False,
+                    Token::Ident,
+                ],
+                token,
+                self.range.clone(),
+            )),
+        }
+    }
+
+    fn literal(&mut self, mut token: Token) -> Output<ast::Literal> {
+        let sign = if let Token::Minus = token {
+            token = self.next_token();
+            -1
+        } else {
+            1
+        };
+        match token {
+            Token::True => Ok(ast::Literal::Boolean(true)),
+            Token::False => Ok(ast::Literal::Boolean(false)),
+            Token::String => Ok(ast::Literal::String(String::from(
+                &self.slice[1..self.slice.len() - 1],
+            ))),
+            Token::Int => Ok(ast::Literal::Number(self.number(token, sign)?)),
+            token => Err(error::ParserError::expected(
+                vec![Token::True, Token::False, Token::Int],
+                token,
+                self.range.clone(),
+            )),
+        }
+    }
+
+    fn number(&mut self, token: Token, sign: isize) -> Output<ast::Number> {
+        match token {
+            Token::Int => Ok(ast::Number::Int(
+                sign * str::from_utf8(self.slice.as_bytes())
+                    .expect("Could not parse byte array")
+                    .parse::<isize>()
+                    .expect("Parsing of integer failed"),
+            )),
+            token => Err(error::ParserError::expected(
+                vec![Token::Int],
+                token,
+                self.range.clone(),
+            )),
+        }
+    }
+
     fn next_token(&mut self) -> Token {
         if let Some(token_item) = self.lexer.next() {
             self.range = token_item.range();
@@ -240,8 +419,9 @@ where
         if expected == token {
             Ok(())
         } else {
-            Err(error::ParserError::error(
-                format!("Expected token: {:?}, found: {:?}", expected, token),
+            Err(error::ParserError::expected(
+                vec![expected],
+                token,
                 self.range.clone(),
             ))
         }

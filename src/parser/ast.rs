@@ -2,9 +2,96 @@ use super::error::ParserError;
 use super::Output;
 use super::Parser;
 use super::Source;
-use super::Token;
+use super::{Token, Tokens};
 use std::ops::Deref;
 use std::str;
+
+pub type ProgramContainer = Box<Program>;
+
+#[derive(Debug, PartialEq)]
+pub enum Program {
+    Decl(Decl, ProgramContainer),
+    Empty,
+}
+
+#[derive(Debug, PartialEq)]
+pub enum Decl {
+    VarDecl(VarDecl),
+    FuncDecl(FuncDecl),
+}
+
+#[derive(Debug, PartialEq)]
+pub struct FuncDecl {
+    pub name: String,
+    pub args: Vec<ArgDecl>,
+    pub return_type: Type,
+    pub body: Block,
+}
+
+impl FuncDecl {
+    pub fn new(name: &str, args: Vec<ArgDecl>, return_type: Type, body: Block) -> Self {
+        Self {
+            name: name.to_string(),
+            args,
+            return_type,
+            body,
+        }
+    }
+}
+
+#[derive(Debug, PartialEq)]
+pub struct ArgDecl {
+    pub name: String,
+    pub arg_type: Type,
+}
+
+impl ArgDecl {
+    pub fn new(name: &str, arg_type: Type) -> Self {
+        Self {
+            name: name.to_string(),
+            arg_type,
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum Type {
+    Int,
+    Float,
+    Double,
+    Boolean,
+    String,
+    Void,
+    UserDefined(String),
+}
+
+impl<Source> From<&mut Parser<Source>> for Type
+where
+    Source: self::Source<'static> + Copy,
+{
+    fn from(parser: &mut Parser<Source>) -> Type {
+        match parser.next_token() {
+            Token::IntType => Type::Int,
+            Token::FloatType => Type::Float,
+            Token::DoubleType => Type::Double,
+            Token::BooleanType => Type::Boolean,
+            Token::VoidType => Type::Void,
+            Token::Ident => Type::UserDefined(String::from(parser.slice)),
+            token => panic!(
+                "Expected {}, found {}",
+                Tokens::from(vec![
+                    Token::IntType,
+                    Token::FloatType,
+                    Token::DoubleType,
+                    Token::BooleanType,
+                    Token::VoidType,
+                    Token::Ident
+                ]),
+                token
+            ),
+        }
+    }
+}
 
 #[derive(Debug, PartialEq)]
 pub enum Statement {
@@ -68,11 +155,12 @@ impl Expression {
     {
         if let Some(token_item) = parser.lexer.peek() {
             match token_item.token {
-                Token::Ident | Token::Minus | Token::Int | Token::True | Token::False => {
-                    let res = Ok(Expression::Value(parser.into()));
-                    parser.next_token();
-                    res
-                }
+                Token::Ident
+                | Token::Minus
+                | Token::Int
+                | Token::String
+                | Token::True
+                | Token::False => Ok(Expression::Value(parser.value()?)),
                 Token::LParen => {
                     parser.expect_token(Token::LParen)?;
                     let expr = parser.expression(0);
@@ -123,47 +211,38 @@ impl Expression {
 pub enum Value {
     Literal(Literal),
     Variable(String),
-}
-
-impl<Source> From<&mut Parser<Source>> for Value
-where
-    Source: self::Source<'static> + Copy,
-{
-    fn from(parser: &mut Parser<Source>) -> Self {
-        if let Some(token_item) = parser.lexer.peek() {
-            match token_item.token {
-                Token::Minus | Token::Int | Token::True | Token::False => {
-                    Value::Literal(parser.into())
-                }
-                Token::Ident => Value::Variable(String::from(token_item.slice())),
-                _ => panic!("Expected: number or boolean in parsing of Value"),
-            }
-        } else {
-            panic!("Expected: number or boolean in parsing of Value");
-        }
-    }
+    FunctionCall(FunctionCall),
 }
 
 #[derive(Debug, PartialEq)]
 pub enum Literal {
     Number(Number),
     Boolean(bool),
+    String(String),
 }
 
-impl<Source> From<&mut Parser<Source>> for Literal
-where
-    Source: self::Source<'static> + Copy,
-{
-    fn from(parser: &mut Parser<Source>) -> Self {
-        if let Some(token_item) = parser.lexer.peek() {
-            match token_item.token {
-                Token::Int | Token::Minus => Literal::Number(parser.into()),
-                Token::True => Literal::Boolean(true),
-                Token::False => Literal::Boolean(false),
-                _ => panic!("Expected: number or boolean in parsing of Literal"),
-            }
-        } else {
-            panic!("Expected: number or boolean in parsing of Literal");
+//impl From<Token> for Literal {
+//    fn from(token: Token) -> Self {
+//        match token {
+//            Token::Int | Token::Minus => Literal::Number(token.into()),
+//            Token::True => Literal::Boolean(true),
+//            Token::False => Literal::Boolean(false),
+//            _ => panic!("Expected: number or boolean in parsing of Literal"),
+//        }
+//    }
+//}
+
+#[derive(Debug, PartialEq)]
+pub struct FunctionCall {
+    pub name: String,
+    pub arguments: Vec<Expression>,
+}
+
+impl FunctionCall {
+    pub fn new(name: &str, arguments: Vec<Expression>) -> Self {
+        Self {
+            name: String::from(name),
+            arguments,
         }
     }
 }

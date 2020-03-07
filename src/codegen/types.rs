@@ -1,3 +1,4 @@
+use crate::parser::ast::Type;
 use llvm::core::*;
 use llvm::prelude::{LLVMContextRef, LLVMTypeRef};
 use std::os::raw::c_uint;
@@ -43,5 +44,17 @@ impl Types {
 
     pub fn main() -> Self {
         Types::Func(Box::new(Types::Int), Vec::new(), false)
+    }
+}
+
+impl From<Type> for Types {
+    fn from(value: Type) -> Self {
+        match value {
+            Type::Int => Self::Int,
+            Type::Boolean => Self::Bool,
+            Type::String => Self::String,
+            Type::Void => Self::Void,
+            t => panic!("Type not yet implemented for: {:?}", t),
+        }
     }
 }

@@ -1,15 +1,26 @@
 use super::*;
 
-struct Environment {
+struct FunctionEnvironment {
     variables: HashMap<String, LLVMValueRef>,
     basic_blocks: HashMap<String, LLVMBasicBlockRef>,
+    global: Environment,
 }
 
-impl Default for Environment {
+impl FunctionEnvironment {
+    pub fn new(global: Environment) -> Self {
+        Self {
+            global,
+            ..Default::default()
+        }
+    }
+}
+
+impl Default for FunctionEnvironment {
     fn default() -> Self {
         Self {
             variables: HashMap::new(),
             basic_blocks: HashMap::new(),
+            global: Environment::default(),
         }
     }
 }
@@ -18,7 +29,7 @@ pub struct Function {
     pub module: Rc<RefCell<module::Module>>,
     pub builder: LLVMBuilderRef,
     pub context: LLVMContextRef,
-    environment: Environment,
+    environment: FunctionEnvironment,
     value: LLVMValueRef,
     name: String,
 }
@@ -30,7 +41,7 @@ impl Function {
             module: codegen.module.clone(),
             builder: codegen.builder,
             context: codegen.context,
-            environment: Environment::default(),
+            environment: FunctionEnvironment::new(codegen.environment.clone()),
             value,
             name: String::from(name),
         }
@@ -123,12 +134,20 @@ impl Function {
                         if *boolean { 1 } else { 0 },
                         0,
                     ),
+                    Value::Literal(Literal::String(string)) => self.build_global_string(&string),
                     Value::Variable(name) => {
                         if let Some(var) = self.var(name) {
                             self.build_load(var)
                         } else {
                             panic!("Variable '{}' has not been declared yet", name);
                         }
+                    }
+                    Value::FunctionCall(func) => {
+                        let mut args = Vec::new();
+                        for arg in func.arguments.iter() {
+                            args.push(self.build_expression(&arg));
+                        }
+                        self.call_other(&func.name, &mut args, "")
                     }
                     _ => panic!("Not yet implemented!"),
                 },
@@ -167,6 +186,28 @@ impl Function {
 
     pub fn value(&self) -> LLVMValueRef {
         self.value
+    }
+
+    pub fn call_other(
+        &self,
+        function_name: &str,
+        args: &mut [LLVMValueRef],
+        name: &str,
+    ) -> LLVMValueRef {
+        unsafe {
+            LLVMBuildCall(
+                self.builder,
+                self.environment
+                    .global
+                    .borrow()
+                    .get(function_name)
+                    .unwrap()
+                    .value,
+                args.as_mut_ptr(),
+                args.len() as c_uint,
+                self.module.borrow_mut().new_string_ptr(name),
+            )
+        }
     }
 
     #[cfg(feature = "codegen-debug")]

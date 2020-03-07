@@ -1,12 +1,12 @@
 use llvm::execution_engine::*;
-//use llvm::prelude::*;
+use llvm::prelude::*;
 use llvm::target::*;
 use std::cell::RefCell;
 use std::mem;
 use std::os::raw::{c_char, c_int, c_uint};
 use std::rc::Rc;
 
-use super::codegen::{function::Function, module::Module, Codegen};
+use super::codegen::{module::Module, Codegen};
 
 pub struct ExecutionEngine {
     _codegen: Codegen,
@@ -49,11 +49,11 @@ impl ExecutionEngine {
         }
     }
 
-    pub fn run_as_main(&mut self, main_fn: Function, argv: &[&str]) -> c_int {
+    pub fn run_as_main(&mut self, main_fn: LLVMValueRef, argv: &[&str]) -> c_int {
         unsafe {
             LLVMRunFunctionAsMain(
                 self.ee,
-                main_fn.value(),
+                main_fn,
                 argv.len() as c_uint,
                 argv.iter()
                     .map(|arg| self.module.borrow_mut().new_string_ptr(arg))
