@@ -49,9 +49,21 @@
 //!               |  EXPRESSION Slash EXPRESSION
 //!               |  EXPRESSION Percent EXPRESSION
 //!               |  EXPRESSION Equality EXPRESSION
+//!               |  EXPRESSION NotEq EXPRESSION
+//!               |  EXPRESSION LessThan EXPRESSION
+//!               |  EXPRESSION GreaterThan EXPRESSION
+//!               |  EXPRESSION LessEq EXPRESSION
+//!               |  EXPRESSION GreaterEq EXPRESSION
+//!               |  EXPRESSION And EXPRESSION
+//!               |  EXPRESSION Or EXPRESSION
+//!               |  Not EXPRESSION
 //!               |  LParen EXPRESSION RParen
+//!               |  IF_EXPRESSION
 //!               |  BLOCK
 //!               |  VALUE
+//!               ;
+//!
+//! IF_EXPRESSION := If EXPRESSION BLOCK [ Else ( BLOCK | IF_EXPRESSION ) ]
 //!               ;
 //!
 //! VALUE         := LITERAL
@@ -69,10 +81,10 @@
 //!               ;
 //! ```
 
-use super::lexer::{wrapper::LexerWrapper, Token, Tokens};
+use super::lexer::{wrapper::LexerWrapper, RangeConverter, Token, Tokens};
 use logos::source::Source;
 use std::iter::Peekable;
-use std::ops::Range;
+//use std::ops::Range;
 use std::str;
 
 pub mod ast;
@@ -83,24 +95,29 @@ mod test;
 
 pub type Output<Out = ()> = Result<Out, error::ParserError>;
 
-pub struct Parser<Source>
+pub struct Parser<'source, Source>
 where
-    Source: logos::source::Source<'static> + Copy,
+    Source: logos::source::Source<'source> + Copy,
 {
     lexer: Peekable<LexerWrapper<Source>>,
-    range: Range<usize>,
-    slice: &'static str,
+    range: (usize, usize),
+    slice: &'source str,
+    range_converter: RangeConverter,
 }
 
-impl<Source> Parser<Source>
+impl<'source, Source> Parser<'source, Source>
 where
-    Source: self::Source<'static> + Copy,
+    Source: self::Source<'source> + Copy,
 {
-    pub fn new(lexer: LexerWrapper<Source>) -> Parser<Source> {
+    pub fn new(
+        lexer: LexerWrapper<Source>,
+        range_converter: RangeConverter,
+    ) -> Parser<'source, Source> {
         Parser {
             lexer: lexer.peekable(),
-            range: 0..1,
+            range: (0, 0),
             slice: "",
+            range_converter,
         }
     }
 
@@ -138,7 +155,7 @@ where
             token => Err(error::ParserError::expected(
                 vec![Token::Fn, Token::Let, Token::End],
                 token,
-                self.range.clone(),
+                self.range,
             )),
         }
     }
@@ -154,7 +171,7 @@ where
             token => Err(error::ParserError::expected(
                 vec![Token::Fn, Token::Let],
                 token,
-                self.range.clone(),
+                self.range,
             )),
         }
     }
@@ -213,7 +230,7 @@ where
                     Token::Ident,
                 ],
                 token,
-                self.range.clone(),
+                self.range,
             )),
         }
     }
@@ -234,7 +251,7 @@ where
                 token => {
                     return Err(error::ParserError::error(
                         &format!("Expected ; or }}, found: {:?} ({})", token, self.slice),
-                        self.range.clone(),
+                        self.range,
                     ))
                 }
             }
@@ -252,13 +269,12 @@ where
             | Token::Ident
             | Token::Int
             | Token::String
+            | Token::If
+            | Token::Not
             | Token::True
             | Token::False => Ok(ast::Statement::Expression(self.expression(0)?)),
             Token::RBrace => Ok(ast::Statement::Empty),
-            _ => Err(error::ParserError::error(
-                "Unsupported token.",
-                self.range.clone(),
-            )),
+            _ => Err(error::ParserError::error("Unsupported token.", self.range)),
         }
         //println!(
         //    "Finished parsing statement, next token: {:?}",
@@ -268,14 +284,8 @@ where
 
     fn identifier(&mut self) -> Output<String> {
         //println!("Parsing Identifier, next token: {:?}", self.peek_token());
-        if let Token::Ident = self.next_token() {
-            Ok(String::from(self.slice))
-        } else {
-            Err(error::ParserError::error(
-                "Token is not an identifier",
-                self.range.clone(),
-            ))
-        }
+        self.expect_token(Token::Ident)?;
+        Ok(String::from(self.slice))
     }
 
     fn var_decl(&mut self) -> Output<ast::VarDecl> {
@@ -310,6 +320,31 @@ where
         //    self.peek_token()
         //);
         Ok(left)
+    }
+
+    fn if_expression(&mut self) -> Output<ast::IfExpression> {
+        self.expect_token(Token::If)?;
+        let condition = self.expression(0)?;
+        let body = self.block()?;
+
+        let mut else_expression = ast::ElseExpression::None;
+        if let Token::Else = self.peek_token() {
+            self.expect_token(Token::Else)?;
+            else_expression = match self.peek_token() {
+                Token::LBrace => ast::ElseExpression::Block(self.block()?),
+                Token::If => ast::ElseExpression::IfExpression(ast::IfExpressionContainer::new(
+                    self.if_expression()?,
+                )),
+                token => {
+                    return Err(error::ParserError::expected(
+                        vec![Token::LBrace, Token::If],
+                        token,
+                        self.range,
+                    ))
+                }
+            }
+        }
+        Ok(ast::IfExpression::new(condition, body, else_expression))
     }
 
     fn value(&mut self) -> Output<ast::Value> {
@@ -351,7 +386,7 @@ where
                     Token::Ident,
                 ],
                 token,
-                self.range.clone(),
+                self.range,
             )),
         }
     }
@@ -373,7 +408,7 @@ where
             token => Err(error::ParserError::expected(
                 vec![Token::True, Token::False, Token::Int],
                 token,
-                self.range.clone(),
+                self.range,
             )),
         }
     }
@@ -389,14 +424,14 @@ where
             token => Err(error::ParserError::expected(
                 vec![Token::Int],
                 token,
-                self.range.clone(),
+                self.range,
             )),
         }
     }
 
     fn next_token(&mut self) -> Token {
         if let Some(token_item) = self.lexer.next() {
-            self.range = token_item.range();
+            self.range = self.range_converter.to_line_and_pos(token_item.range());
             self.slice = token_item.slice();
             //println!("Consuming token: {:?} ({})", token_item.token, self.slice);
             token_item.token
@@ -422,7 +457,7 @@ where
             Err(error::ParserError::expected(
                 vec![expected],
                 token,
-                self.range.clone(),
+                self.range,
             ))
         }
     }

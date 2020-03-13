@@ -1,28 +1,17 @@
 use logos::Logos;
 use poop::codegen::Codegen;
 use poop::execution_engine::ExecutionEngine;
-use poop::lexer::{wrapper::LexerWrapper, Token};
+use poop::lexer::{wrapper::LexerWrapper, RangeConverter, Token};
 use poop::parser::Parser;
+use std::fs;
 
 fn main() {
-    let program = "
-    fn calc() -> int {
-        let x = 5 + 10;
-        let z = {
-            let y = x + 2;
-            5
-        };
-        x + 4 * y + z
-    }
-
-    fn main() -> int {
-        printf(\"Output: %d\n\", calc());
-        0
-    }";
+    let program = fs::read_to_string("test.poop").unwrap();
     println!("Running the following program: {}", program);
 
-    let lexer = LexerWrapper(Token::lexer(program));
-    let mut parser = Parser::new(lexer);
+    let range_converter = RangeConverter::new(&program);
+    let lexer = LexerWrapper(Token::lexer(&program as &str));
+    let mut parser = Parser::new(lexer, range_converter);
     let program = parser.parse().expect("This should be able to parse");
 
     let mut codegen = Codegen::new("test");

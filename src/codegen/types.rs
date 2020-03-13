@@ -18,7 +18,7 @@ impl Types {
         unsafe {
             match self {
                 Types::Int => LLVMInt64TypeInContext(context),
-                Types::Bool => LLVMInt8TypeInContext(context),
+                Types::Bool => LLVMInt1TypeInContext(context),
                 Types::Char => LLVMInt8TypeInContext(context),
                 Types::String => LLVMPointerType(Types::Char.to_llvm(context), 0),
                 Types::Void => LLVMVoidType(),

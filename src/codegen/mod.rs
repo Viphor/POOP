@@ -82,8 +82,22 @@ impl Codegen {
 
         let mut func = function::Function::new(self, ft, &function.name);
         func.build(&|func| {
-            func.basic_block("block");
-            func.position_at_block("block");
+            // Function setup
+            let entry = func.basic_block("entry");
+            func.position_at_block_ref(entry);
+            for (i, arg) in function.args.iter().enumerate() {
+                println!("Setting param: {} to name: {}", i, &arg.name);
+                let ptr = func.build_stack_ptr(arg.arg_type.clone().into(), &arg.name);
+                let val = func.get_param(i as u32);
+                func.assign(&arg.name, ptr);
+                func.build_store(val, ptr);
+            }
+
+            // Actual body
+            let block = func.basic_block("block");
+            // Transition to new bb
+            func.build_br(block);
+            func.position_at_block_ref(block);
             let ret = func.build_block(&function.body);
             if let Type::Void = function.return_type {
                 func.build_ret_void();

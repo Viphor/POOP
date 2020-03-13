@@ -82,7 +82,7 @@ where
     type Item = TokenItem<Token, Source>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if Token::LineComment == self.token {
+        while Token::LineComment == self.token {
             self.advance();
         }
 

@@ -3,11 +3,11 @@ use backtrace::Backtrace;
 
 use super::{Token, Tokens};
 use std::fmt;
-use std::ops::Range;
+//use std::ops::Range;
 
 pub struct ParserError {
     message: String,
-    position: Range<usize>,
+    position: (usize, usize),
     code: ParserErrorCode,
     #[cfg(feature = "parser-debug")]
     backtrace: Backtrace,
@@ -17,7 +17,7 @@ impl ParserError {
     pub fn new<T: Into<String>>(
         message: T,
         code: ParserErrorCode,
-        position: Range<usize>,
+        position: (usize, usize),
     ) -> ParserError {
         ParserError {
             message: message.into(),
@@ -28,11 +28,11 @@ impl ParserError {
         }
     }
 
-    pub fn error<T: Into<String>>(message: T, position: Range<usize>) -> ParserError {
+    pub fn error<T: Into<String>>(message: T, position: (usize, usize)) -> ParserError {
         ParserError::new(message, ParserErrorCode::E9999, position)
     }
 
-    pub fn expected(expected: Vec<Token>, found: Token, position: Range<usize>) -> ParserError {
+    pub fn expected(expected: Vec<Token>, found: Token, position: (usize, usize)) -> ParserError {
         ParserError::new(
             format!("Expected {}, found: {}", Tokens::from(expected), found),
             ParserErrorCode::E0002,
@@ -53,7 +53,7 @@ impl fmt::Debug for ParserError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "Parser error {:?}: {} ({:?})",
+            "Parser error {:?}: {} {:?}",
             self.code, self.message, self.position
         )?;
         #[cfg(feature = "parser-debug")]

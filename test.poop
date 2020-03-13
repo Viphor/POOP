@@ -1,0 +1,53 @@
+fn test_comparison() {
+    printf("Comparison test <: %d
+", 5 < 10);
+    printf("Comparison test < (fail): %d
+", 10 < 5);
+    printf("Comparison test < (equal): %d
+", 5 < 5);
+    printf("Comparison test < (not true): %d
+", !5 < 10);
+}
+
+fn test_if(test: bool) -> int {
+    if test {
+        if !test {
+            2
+        } else {
+            5
+        }
+    } else {
+        3
+    }
+}
+
+fn fac(n: int) -> int {
+    if n < 2 {
+        n
+    } else {
+        n * fac(n - 1)
+    }
+}
+
+fn calc(a: int) -> int {
+    let x = 5 + 10;
+    let z = {
+        let y = x + 2;
+        5
+    };
+    x + 4 * y + z + a
+}
+
+fn main() -> int {
+    printf("Output: %d
+", calc(1));
+    test_comparison();
+
+    printf("Testing if: %d
+", test_if(true));
+
+    printf("Factorial of 10: %d
+", fac(10));
+
+    !true
+}

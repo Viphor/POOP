@@ -24,9 +24,16 @@ pub trait Builder {
     fn build_ret_void(&mut self) -> LLVMValueRef;
     fn build_ret(&mut self, value: LLVMValueRef) -> LLVMValueRef;
     fn position_at_block(&mut self, basic_block: LLVMBasicBlockRef);
+    fn build_br(&mut self, basic_block: LLVMBasicBlockRef) -> LLVMValueRef;
     fn build_const_pointer(&mut self, value: LLVMValueRef, to_type: Types) -> LLVMValueRef;
     fn build_null(&mut self, null_type: Types) -> LLVMValueRef;
     fn build_global_string(&mut self, value: &str) -> LLVMValueRef;
+    fn build_phi(
+        &mut self,
+        value_type: Types,
+        incoming: Vec<(LLVMBasicBlockRef, LLVMValueRef)>,
+    ) -> LLVMValueRef;
+    fn set_value_name(&mut self, value: LLVMValueRef, name: &str);
 }
 
 impl Builder for Codegen {
@@ -173,6 +180,32 @@ impl Builder for Codegen {
             LLVMPositionBuilderAtEnd(self.builder, basic_block);
         }
     }
+
+    fn build_br(&mut self, basic_block: LLVMBasicBlockRef) -> LLVMValueRef {
+        unsafe { LLVMBuildBr(self.builder, basic_block) }
+    }
+
+    fn build_phi(
+        &mut self,
+        value_type: Types,
+        incoming: Vec<(LLVMBasicBlockRef, LLVMValueRef)>,
+    ) -> LLVMValueRef {
+        unsafe {
+            let value = LLVMBuildPhi(
+                self.builder,
+                value_type.to_llvm(self.context),
+                self.module.borrow().empty_string(),
+            );
+            let count = incoming.len() as u32;
+            let (mut blocks, mut values): (Vec<_>, Vec<_>) = incoming.iter().cloned().unzip();
+            LLVMAddIncoming(value, values.as_mut_ptr(), blocks.as_mut_ptr(), count);
+            value
+        }
+    }
+
+    fn set_value_name(&mut self, value: LLVMValueRef, name: &str) {
+        unsafe { LLVMSetValueName2(value, self.module.borrow_mut().new_string_ptr(name), 0) }
+    }
 }
 
 impl Builder for function::Function {
@@ -282,5 +315,31 @@ impl Builder for function::Function {
         unsafe {
             LLVMPositionBuilderAtEnd(self.builder, basic_block);
         }
+    }
+
+    fn build_br(&mut self, basic_block: LLVMBasicBlockRef) -> LLVMValueRef {
+        unsafe { LLVMBuildBr(self.builder, basic_block) }
+    }
+
+    fn build_phi(
+        &mut self,
+        value_type: Types,
+        incoming: Vec<(LLVMBasicBlockRef, LLVMValueRef)>,
+    ) -> LLVMValueRef {
+        unsafe {
+            let value = LLVMBuildPhi(
+                self.builder,
+                value_type.to_llvm(self.context),
+                self.module.borrow().empty_string(),
+            );
+            let count = incoming.len() as u32;
+            let (mut blocks, mut values): (Vec<_>, Vec<_>) = incoming.iter().cloned().unzip();
+            LLVMAddIncoming(value, values.as_mut_ptr(), blocks.as_mut_ptr(), count);
+            value
+        }
+    }
+
+    fn set_value_name(&mut self, value: LLVMValueRef, name: &str) {
+        unsafe { LLVMSetValueName2(value, self.module.borrow_mut().new_string_ptr(name), 0) }
     }
 }

@@ -3,13 +3,15 @@ use super::*;
 use logos::Logos;
 
 fn parser(program: &'static str) -> Parser<&'static str> {
-    Parser::new(LexerWrapper(Token::lexer(program)))
+    Parser::new(
+        LexerWrapper(Token::lexer(program)),
+        RangeConverter::new(program),
+    )
 }
 
 #[test]
 fn expression_precedence_multiplication_last_test() {
-    let lexer = LexerWrapper(Token::lexer("3 + 4 * 5"));
-    let mut parser = Parser::new(lexer);
+    let mut parser = parser("3 + 4 * 5");
     let expression = parser.expression(0);
 
     let expected = Expression::Addition(
@@ -32,8 +34,7 @@ fn expression_precedence_multiplication_last_test() {
 
 #[test]
 fn expression_precedence_multiplication_first_test() {
-    let lexer = LexerWrapper(Token::lexer("3 * 4 + 5"));
-    let mut parser = Parser::new(lexer);
+    let mut parser = parser("3 * 4 + 5");
     let expression = parser.expression(0);
 
     let expected = Expression::Addition(
@@ -56,8 +57,7 @@ fn expression_precedence_multiplication_first_test() {
 
 #[test]
 fn expression_precedence_parentheses_test() {
-    let lexer = LexerWrapper(Token::lexer("3 * (4 + 5)"));
-    let mut parser = Parser::new(lexer);
+    let mut parser = parser("3 * (4 + 5)");
     let expression = parser.expression(0);
 
     let expected = Expression::Multiplication(
@@ -80,8 +80,7 @@ fn expression_precedence_parentheses_test() {
 
 #[test]
 fn expression_precedence_double_parentheses_test() {
-    let lexer = LexerWrapper(Token::lexer("(3 * (4 + 5)) + 6"));
-    let mut parser = Parser::new(lexer);
+    let mut parser = parser("(3 * (4 + 5)) + 6");
     let expression = parser.expression(0);
 
     let expected = Expression::Addition(
@@ -109,8 +108,7 @@ fn expression_precedence_double_parentheses_test() {
 
 #[test]
 fn expression_multiplication_and_unary_minus_test() {
-    let lexer = LexerWrapper(Token::lexer("3 * -4"));
-    let mut parser = Parser::new(lexer);
+    let mut parser = parser("3 * -4");
     let expression = parser.expression(0);
 
     let expected = Expression::Multiplication(
@@ -128,8 +126,7 @@ fn expression_multiplication_and_unary_minus_test() {
 
 #[test]
 fn expression_unary_minus_first_then_multiplication_test() {
-    let lexer = LexerWrapper(Token::lexer("-3 * 4"));
-    let mut parser = Parser::new(lexer);
+    let mut parser = parser("-3 * 4");
     let expression = parser.expression(0);
 
     let expected = Expression::Multiplication(
@@ -147,8 +144,7 @@ fn expression_unary_minus_first_then_multiplication_test() {
 
 #[test]
 fn expression_precedence_modulus_first_test() {
-    let lexer = LexerWrapper(Token::lexer("3 % 4 + 5"));
-    let mut parser = Parser::new(lexer);
+    let mut parser = parser("3 % 4 + 5");
     let expression = parser.expression(0);
 
     let expected = Expression::Modulus(
@@ -171,8 +167,7 @@ fn expression_precedence_modulus_first_test() {
 
 #[test]
 fn expression_precedence_modulus_last_test() {
-    let lexer = LexerWrapper(Token::lexer("3 + 4 % 5"));
-    let mut parser = Parser::new(lexer);
+    let mut parser = parser("3 + 4 % 5");
     let expression = parser.expression(0);
 
     let expected = Expression::Modulus(
@@ -286,8 +281,7 @@ fn expression_with_function_call_with_multiple_arguments() {
 
 #[test]
 fn var_decl_with_string() {
-    let lexer = LexerWrapper(Token::lexer("let x = \"hello, world!\""));
-    let mut parser = Parser::new(lexer);
+    let mut parser = parser("let x = \"hello, world!\"");
     let var_decl = parser.var_decl();
 
     let expected = VarDecl::new(
@@ -303,8 +297,7 @@ fn var_decl_with_string() {
 
 #[test]
 fn var_decl() {
-    let lexer = LexerWrapper(Token::lexer("let x = 5"));
-    let mut parser = Parser::new(lexer);
+    let mut parser = parser("let x = 5");
     let var_decl = parser.var_decl();
 
     let expected = VarDecl::new(
@@ -318,8 +311,7 @@ fn var_decl() {
 
 #[test]
 fn block_single_statement_with_return() {
-    let lexer = LexerWrapper(Token::lexer("{ let x = 5 }"));
-    let mut parser = Parser::new(lexer);
+    let mut parser = parser("{ let x = 5 }");
     let block = parser.block();
 
     let expected = Block::new(vec![Statement::VarDecl(VarDecl::new(
@@ -333,8 +325,7 @@ fn block_single_statement_with_return() {
 
 #[test]
 fn block_single_statement_without_return() {
-    let lexer = LexerWrapper(Token::lexer("{ let x = 5; }"));
-    let mut parser = Parser::new(lexer);
+    let mut parser = parser("{ let x = 5; }");
     let block = parser.block();
 
     let expected = Block::new(vec![
@@ -351,8 +342,7 @@ fn block_single_statement_without_return() {
 
 #[test]
 fn block_double_statement_with_return() {
-    let lexer = LexerWrapper(Token::lexer("{ let x = 5; x + 5 }"));
-    let mut parser = Parser::new(lexer);
+    let mut parser = parser("{ let x = 5; x + 5 }");
     let block = parser.block();
 
     let expected = Block::new(vec![
@@ -374,8 +364,7 @@ fn block_double_statement_with_return() {
 
 #[test]
 fn block_with_inner_block() {
-    let lexer = LexerWrapper(Token::lexer("{ { let x = 5; x + 5 } }"));
-    let mut parser = Parser::new(lexer);
+    let mut parser = parser("{ { let x = 5; x + 5 } }");
     let block = parser.block();
 
     let expected = Block::new(vec![Statement::Expression(Expression::Block(Block::new(
@@ -399,8 +388,7 @@ fn block_with_inner_block() {
 
 #[test]
 fn arg_decls_single_arg() {
-    let lexer = LexerWrapper(Token::lexer("first: int"));
-    let mut parser = Parser::new(lexer);
+    let mut parser = parser("first: int");
     let arg_decl = parser.arg_decls();
 
     let expected = vec![ArgDecl::new("first", Type::Int)];
@@ -411,8 +399,7 @@ fn arg_decls_single_arg() {
 
 #[test]
 fn arg_decls_multiple_args() {
-    let lexer = LexerWrapper(Token::lexer("first: int, second: double, third: bool"));
-    let mut parser = Parser::new(lexer);
+    let mut parser = parser("first: int, second: double, third: bool");
     let arg_decls = parser.arg_decls();
 
     let expected = vec![
@@ -583,4 +570,108 @@ fn program_with_single_function() {
 
     println!("{:?}", program);
     assert_eq!(program.unwrap(), expected);
+}
+
+#[test]
+fn if_expression_no_else() {
+    let mut parser = parser("if x < 3 { 5 }");
+    let if_expression = parser.if_expression();
+
+    let expected = IfExpression::new(
+        Expression::LessThan(
+            ExpressionContainer::new(Expression::Value(Value::Variable(String::from("x")))),
+            ExpressionContainer::new(Expression::Value(Value::Literal(Literal::Number(
+                Number::Int(3),
+            )))),
+        ),
+        Block::new(vec![Statement::Expression(Expression::Value(
+            Value::Literal(Literal::Number(Number::Int(5))),
+        ))]),
+        ElseExpression::None,
+    );
+
+    println!("{:?}", if_expression);
+    assert_eq!(if_expression.unwrap(), expected);
+}
+
+#[test]
+fn if_expression_with_else_block() {
+    let mut parser = parser("if x < 3 { 5 } else { 2 }");
+    let if_expression = parser.if_expression();
+
+    let expected = IfExpression::new(
+        Expression::LessThan(
+            ExpressionContainer::new(Expression::Value(Value::Variable(String::from("x")))),
+            ExpressionContainer::new(Expression::Value(Value::Literal(Literal::Number(
+                Number::Int(3),
+            )))),
+        ),
+        Block::new(vec![Statement::Expression(Expression::Value(
+            Value::Literal(Literal::Number(Number::Int(5))),
+        ))]),
+        ElseExpression::Block(Block::new(vec![Statement::Expression(Expression::Value(
+            Value::Literal(Literal::Number(Number::Int(2))),
+        ))])),
+    );
+
+    println!("{:?}", if_expression);
+    assert_eq!(if_expression.unwrap(), expected);
+}
+
+#[test]
+fn if_expression_with_else_if() {
+    let mut parser = parser("if x < 3 { 5 } else if x > 2 { 2 }");
+    let if_expression = parser.if_expression();
+
+    let expected = IfExpression::new(
+        Expression::LessThan(
+            ExpressionContainer::new(Expression::Value(Value::Variable(String::from("x")))),
+            ExpressionContainer::new(Expression::Value(Value::Literal(Literal::Number(
+                Number::Int(3),
+            )))),
+        ),
+        Block::new(vec![Statement::Expression(Expression::Value(
+            Value::Literal(Literal::Number(Number::Int(5))),
+        ))]),
+        ElseExpression::IfExpression(IfExpressionContainer::new(IfExpression::new(
+            Expression::GreaterThan(
+                ExpressionContainer::new(Expression::Value(Value::Variable(String::from("x")))),
+                ExpressionContainer::new(Expression::Value(Value::Literal(Literal::Number(
+                    Number::Int(2),
+                )))),
+            ),
+            Block::new(vec![Statement::Expression(Expression::Value(
+                Value::Literal(Literal::Number(Number::Int(2))),
+            ))]),
+            ElseExpression::None,
+        ))),
+    );
+
+    println!("{:?}", if_expression);
+    assert_eq!(if_expression.unwrap(), expected);
+}
+
+#[test]
+fn statement_with_if_expression_no_else() {
+    let mut parser = parser("let x = if x < 3 { 5 }");
+    let if_expression = parser.statement();
+
+    let expected = Statement::VarDecl(VarDecl::new(
+        String::from("x"),
+        Expression::If(IfExpressionContainer::new(IfExpression::new(
+            Expression::LessThan(
+                ExpressionContainer::new(Expression::Value(Value::Variable(String::from("x")))),
+                ExpressionContainer::new(Expression::Value(Value::Literal(Literal::Number(
+                    Number::Int(3),
+                )))),
+            ),
+            Block::new(vec![Statement::Expression(Expression::Value(
+                Value::Literal(Literal::Number(Number::Int(5))),
+            ))]),
+            ElseExpression::None,
+        ))),
+    ));
+
+    println!("{:?}", if_expression);
+    assert_eq!(if_expression.unwrap(), expected);
 }

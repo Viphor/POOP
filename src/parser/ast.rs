@@ -65,11 +65,11 @@ pub enum Type {
     UserDefined(String),
 }
 
-impl<Source> From<&mut Parser<Source>> for Type
+impl<'source, Source> From<&mut Parser<'source, Source>> for Type
 where
-    Source: self::Source<'static> + Copy,
+    Source: self::Source<'source> + Copy,
 {
-    fn from(parser: &mut Parser<Source>) -> Type {
+    fn from(parser: &mut Parser<'source, Source>) -> Type {
         match parser.next_token() {
             Token::IntType => Type::Int,
             Token::FloatType => Type::Float,
@@ -142,6 +142,15 @@ pub enum Expression {
     Division(ExpressionContainer, ExpressionContainer),
     Modulus(ExpressionContainer, ExpressionContainer),
     Equality(ExpressionContainer, ExpressionContainer),
+    NotEq(ExpressionContainer, ExpressionContainer),
+    LessThan(ExpressionContainer, ExpressionContainer),
+    GreaterThan(ExpressionContainer, ExpressionContainer),
+    LessEq(ExpressionContainer, ExpressionContainer),
+    GreaterEq(ExpressionContainer, ExpressionContainer),
+    And(ExpressionContainer, ExpressionContainer),
+    Or(ExpressionContainer, ExpressionContainer),
+    Not(ExpressionContainer),
+    If(IfExpressionContainer),
     Block(Block),
     Value(Value),
 }
@@ -149,9 +158,9 @@ pub enum Expression {
 impl Expression {
     /// NUD stands for `Null-Denotation` which means the operators with no left
     /// context.
-    pub fn nud<Source>(parser: &mut Parser<Source>) -> Output<Expression>
+    pub fn nud<'source, Source>(parser: &mut Parser<'source, Source>) -> Output<Expression>
     where
-        Source: self::Source<'static> + Copy,
+        Source: self::Source<'source> + Copy,
     {
         if let Some(token_item) = parser.lexer.peek() {
             match token_item.token {
@@ -161,6 +170,12 @@ impl Expression {
                 | Token::String
                 | Token::True
                 | Token::False => Ok(Expression::Value(parser.value()?)),
+                Token::Not => {
+                    parser.next_token();
+                    Ok(Expression::Not(ExpressionContainer::new(
+                        parser.expression(0)?,
+                    )))
+                }
                 Token::LParen => {
                     parser.expect_token(Token::LParen)?;
                     let expr = parser.expression(0);
@@ -168,16 +183,19 @@ impl Expression {
                     expr
                 }
                 Token::LBrace => Ok(Expression::Block(parser.block()?)),
+                Token::If => Ok(Expression::If(IfExpressionContainer::new(
+                    parser.if_expression()?,
+                ))),
                 _ => Err(ParserError::error(
                     format!(
                         "Expected: number or boolean, found: {:?}",
                         token_item.slice()
                     ),
-                    token_item.range(),
+                    parser.range_converter.to_line_and_pos(token_item.range()),
                 )),
             }
         } else {
-            Err(ParserError::error("Expected: number or boolean", 0..1))
+            Err(ParserError::error("Expected: number or boolean", (0, 0)))
         }
     }
 
@@ -191,20 +209,78 @@ impl Expression {
             Token::Slash => Ok(Expression::Division(Box::new(left), Box::new(right))),
             Token::Percent => Ok(Expression::Modulus(Box::new(left), Box::new(right))),
             Token::Equality => Ok(Expression::Equality(Box::new(left), Box::new(right))),
-            _ => Err(ParserError::error("Expected: +, -, *, /, %, or ==", 0..1)),
+            Token::NotEq => Ok(Expression::NotEq(Box::new(left), Box::new(right))),
+            Token::LessThan => Ok(Expression::LessThan(Box::new(left), Box::new(right))),
+            Token::GreaterThan => Ok(Expression::GreaterThan(Box::new(left), Box::new(right))),
+            Token::LessEq => Ok(Expression::LessEq(Box::new(left), Box::new(right))),
+            Token::GreaterEq => Ok(Expression::GreaterEq(Box::new(left), Box::new(right))),
+            Token::And => Ok(Expression::And(Box::new(left), Box::new(right))),
+            Token::Or => Ok(Expression::Or(Box::new(left), Box::new(right))),
+            token => Err(ParserError::expected(
+                vec![
+                    Token::Plus,
+                    Token::Minus,
+                    Token::Star,
+                    Token::Slash,
+                    Token::Percent,
+                    Token::Equality,
+                    Token::NotEq,
+                    Token::LessThan,
+                    Token::GreaterThan,
+                    Token::LessEq,
+                    Token::GreaterEq,
+                    Token::And,
+                    Token::Or,
+                ],
+                token,
+                (0, 0),
+            )),
         }
     }
 
     /// Function to determine binding power of an operator
     pub fn bp(token: Token) -> usize {
         match token {
-            Token::Equality => 10,
-            Token::Percent => 20,
-            Token::Plus | Token::Minus => 30,
-            Token::Star | Token::Slash => 40,
+            Token::Or => 10,
+            Token::And => 20,
+            Token::Equality
+            | Token::NotEq
+            | Token::LessThan
+            | Token::GreaterThan
+            | Token::LessEq
+            | Token::GreaterEq => 30,
+            Token::Percent => 40,
+            Token::Plus | Token::Minus => 50,
+            Token::Star | Token::Slash => 60,
             _ => usize::min_value(),
         }
     }
+}
+
+pub type IfExpressionContainer = Box<IfExpression>;
+
+#[derive(Debug, PartialEq)]
+pub struct IfExpression {
+    pub condition: Expression,
+    pub body: Block,
+    pub else_expression: ElseExpression,
+}
+
+impl IfExpression {
+    pub fn new(condition: Expression, body: Block, else_expression: ElseExpression) -> Self {
+        Self {
+            condition,
+            body,
+            else_expression,
+        }
+    }
+}
+
+#[derive(Debug, PartialEq)]
+pub enum ElseExpression {
+    Block(Block),
+    IfExpression(IfExpressionContainer),
+    None,
 }
 
 #[derive(Debug, PartialEq)]
@@ -254,11 +330,11 @@ pub enum Number {
     Double(f64),
 }
 
-impl<Source> From<&mut Parser<Source>> for Number
+impl<'source, Source> From<&mut Parser<'source, Source>> for Number
 where
-    Source: self::Source<'static> + Copy,
+    Source: self::Source<'source> + Copy,
 {
-    fn from(parser: &mut Parser<Source>) -> Self {
+    fn from(parser: &mut Parser<'source, Source>) -> Self {
         let sign = if Token::Minus == parser.peek_token() {
             parser.next_token();
             -1

@@ -1,4 +1,5 @@
 use super::*;
+use llvm::LLVMIntPredicate;
 
 struct FunctionEnvironment {
     variables: HashMap<String, LLVMValueRef>,
@@ -32,6 +33,7 @@ pub struct Function {
     environment: FunctionEnvironment,
     value: LLVMValueRef,
     name: String,
+    current_basic_block: Option<LLVMBasicBlockRef>,
 }
 
 impl Function {
@@ -44,6 +46,7 @@ impl Function {
             environment: FunctionEnvironment::new(codegen.environment.clone()),
             value,
             name: String::from(name),
+            current_basic_block: None,
         }
     }
 
@@ -73,13 +76,28 @@ impl Function {
         }
     }
 
-    pub fn position_at_block(&mut self, name: &str) {
-        unsafe {
-            LLVMPositionBuilderAtEnd(
-                self.builder,
-                *self.environment.basic_blocks.get_mut(name).unwrap(),
-            )
-        }
+    //pub fn position_at_block(&mut self, name: &str) {
+    //    self.position_at_block_ref(*self.environment.basic_blocks.get_mut(name).unwrap())
+    //    //unsafe {
+    //    //    LLVMPositionBuilderAtEnd(
+    //    //        self.builder,
+    //    //        *self.environment.basic_blocks.get_mut(name).unwrap(),
+    //    //    )
+    //    //}
+    //}
+
+    pub fn position_at_block_ref(&mut self, block_ref: LLVMBasicBlockRef) {
+        unsafe { LLVMPositionBuilderAtEnd(self.builder, block_ref) }
+        self.current_basic_block = Some(block_ref);
+    }
+
+    fn build_cond_br(
+        &mut self,
+        condition: LLVMValueRef,
+        then: LLVMBasicBlockRef,
+        else_block: LLVMBasicBlockRef,
+    ) -> LLVMValueRef {
+        unsafe { LLVMBuildCondBr(self.builder, condition, then, else_block) }
     }
 
     pub fn build_statement(&mut self, statement: &Statement) -> LLVMValueRef {
@@ -122,8 +140,60 @@ impl Function {
                     self.build_expression(right),
                     self.module.borrow().empty_string(),
                 ),
-                Expression::Modulus(_left, _right) => unimplemented!(),
-                Expression::Equality(_left, _right) => unimplemented!(),
+                Expression::Modulus(left, right) => LLVMBuildOr(
+                    self.builder,
+                    self.build_expression(left),
+                    self.build_expression(right),
+                    self.module.borrow().empty_string(),
+                ),
+                Expression::Equality(left, right) => {
+                    let left = self.build_expression(left);
+                    let right = self.build_expression(right);
+                    self.build_icmp(LLVMIntPredicate::LLVMIntEQ, left, right)
+                }
+                Expression::NotEq(left, right) => {
+                    let left = self.build_expression(left);
+                    let right = self.build_expression(right);
+                    self.build_icmp(LLVMIntPredicate::LLVMIntNE, left, right)
+                }
+                Expression::LessThan(left, right) => {
+                    let left = self.build_expression(left);
+                    let right = self.build_expression(right);
+                    self.build_icmp(LLVMIntPredicate::LLVMIntSLT, left, right)
+                }
+                Expression::GreaterThan(left, right) => {
+                    let left = self.build_expression(left);
+                    let right = self.build_expression(right);
+                    self.build_icmp(LLVMIntPredicate::LLVMIntSGT, left, right)
+                }
+                Expression::LessEq(left, right) => {
+                    let left = self.build_expression(left);
+                    let right = self.build_expression(right);
+                    self.build_icmp(LLVMIntPredicate::LLVMIntSLE, left, right)
+                }
+                Expression::GreaterEq(left, right) => {
+                    let left = self.build_expression(left);
+                    let right = self.build_expression(right);
+                    self.build_icmp(LLVMIntPredicate::LLVMIntSGE, left, right)
+                }
+                Expression::And(left, right) => LLVMBuildAnd(
+                    self.builder,
+                    self.build_expression(left),
+                    self.build_expression(right),
+                    self.module.borrow().empty_string(),
+                ),
+                Expression::Or(left, right) => LLVMBuildOr(
+                    self.builder,
+                    self.build_expression(left),
+                    self.build_expression(right),
+                    self.module.borrow().empty_string(),
+                ),
+                Expression::Not(expr) => LLVMBuildNot(
+                    self.builder,
+                    self.build_expression(expr),
+                    self.module.borrow().empty_string(),
+                ),
+                Expression::If(if_expression) => self.build_if_expression(if_expression),
                 Expression::Block(block) => self.build_block(block),
                 Expression::Value(value) => match value {
                     Value::Literal(Literal::Number(Number::Int(int))) => {
@@ -155,11 +225,63 @@ impl Function {
         }
     }
 
+    unsafe fn build_icmp(
+        &mut self,
+        op: LLVMIntPredicate,
+        left: LLVMValueRef,
+        right: LLVMValueRef,
+    ) -> LLVMValueRef {
+        LLVMBuildICmp(
+            self.builder,
+            op,
+            left,
+            right,
+            self.module.borrow().empty_string(),
+        )
+    }
+
     pub fn build_block(&mut self, block: &Block) -> LLVMValueRef {
         for statement in block.iter().take(block.len() - 1) {
             self.build_statement(statement);
         }
         self.build_statement(block.last().unwrap())
+    }
+
+    pub fn build_if_expression(&mut self, if_expression: &IfExpression) -> LLVMValueRef {
+        let current_basic_block = self.current_basic_block.unwrap();
+        let after = self.basic_block("after");
+        let condition = self.build_expression(&if_expression.condition);
+        let if_block = self.basic_block("if");
+        self.position_at_block_ref(if_block);
+        let if_body = self.build_block(&if_expression.body);
+        let mut incoming = vec![(self.current_basic_block.unwrap(), if_body)];
+        self.build_br(after);
+        let else_block = match &if_expression.else_expression {
+            ElseExpression::Block(block) => {
+                let basic_block = self.basic_block("else");
+                self.position_at_block_ref(basic_block);
+                incoming.push((basic_block, self.build_block(&block)));
+                self.build_br(after);
+                basic_block
+            }
+            ElseExpression::IfExpression(expr) => {
+                let val = self.build_if_expression(&expr);
+                self.build_br(after);
+                incoming.push((self.current_basic_block.unwrap(), val));
+                self.current_basic_block.unwrap()
+            }
+            ElseExpression::None => {
+                let noop_block = self.basic_block("noop");
+                incoming.push((noop_block, self.build_const_int(0)));
+                self.position_at_block_ref(noop_block);
+                self.build_br(after);
+                noop_block
+            }
+        };
+        self.position_at_block_ref(current_basic_block);
+        self.build_cond_br(condition, if_block, else_block);
+        self.position_at_block_ref(after);
+        self.build_phi(Types::Int, incoming)
     }
 
     pub fn build(&mut self, builder: &dyn Fn(&mut Function) -> ()) {
@@ -195,19 +317,29 @@ impl Function {
         name: &str,
     ) -> LLVMValueRef {
         unsafe {
-            LLVMBuildCall(
-                self.builder,
+            println!("function_name: {}, self.name: {}", function_name, self.name);
+            let other = if function_name == self.name {
+                self.value
+            } else {
                 self.environment
                     .global
                     .borrow()
                     .get(function_name)
                     .unwrap()
-                    .value,
+                    .value
+            };
+            LLVMBuildCall(
+                self.builder,
+                other,
                 args.as_mut_ptr(),
                 args.len() as c_uint,
                 self.module.borrow_mut().new_string_ptr(name),
             )
         }
+    }
+
+    pub fn get_param(&mut self, index: c_uint) -> LLVMValueRef {
+        unsafe { LLVMGetParam(self.value, index) }
     }
 
     #[cfg(feature = "codegen-debug")]
