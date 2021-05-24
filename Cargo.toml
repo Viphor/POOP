@@ -5,13 +5,14 @@ authors = ["Andreas H. Klostergaard <akl@klostergaard.net>"]
 edition = "2018"
 
 [features]
-default = ["parser-debug", "codegen-debug"]
+default = ["parser-debug", "codegen-debug", "type-system-debug"]
 
 parser-debug = ["backtrace"]
 codegen-debug = []
+type-system-debug = ["backtrace"]
 
 [dependencies]
-llvm-sys = "90.0.0"
+llvm-sys = "100.0.1"
 logos = { version = "0.10.0-RC2" }
 backtrace = { version = "0.3.40", optional = true }
 

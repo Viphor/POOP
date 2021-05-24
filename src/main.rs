@@ -7,7 +7,7 @@ use std::fs;
 
 fn main() {
     let program = fs::read_to_string("test.poop").unwrap();
-    println!("Running the following program: {}", program);
+    println!("Running the following program: \"\"\"\n{}\n\"\"\"", program);
 
     let range_converter = RangeConverter::new(&program);
     let lexer = LexerWrapper(Token::lexer(&program as &str));

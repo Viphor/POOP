@@ -1,3 +1,7 @@
+//! Internal module used to wrap the Lexer crate used,
+//! so we can customize how we handle the token location in the input,
+//! and allowing us to skip comments already here, as to not increase the complexity of the parser
+
 use super::Token;
 pub use logos::source::WithSource;
 pub use logos::{Lexer, Logos, Slice, Source};
@@ -5,6 +9,7 @@ use std::fmt;
 pub use std::ops::Range;
 use std::ops::{Deref, DerefMut};
 
+/// Wrapper used for allowing the parser to better get token locations and ignore comments
 pub struct LexerWrapper<Source>(pub Lexer<Token, Source>);
 
 impl<'source, Source> Deref for LexerWrapper<Source>

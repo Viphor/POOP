@@ -60,7 +60,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
 name = "llvm-sys"
-version = "90.0.0"
+version = "100.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "cc 1.0.50 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -102,7 +102,7 @@ version = "0.1.0"
 dependencies = [
  "backtrace 0.3.42 (registry+https://github.com/rust-lang/crates.io-index)",
  "cargo-husky 1.5.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "llvm-sys 90.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "llvm-sys 100.0.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "logos 0.10.0-rc2 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
@@ -202,7 +202,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 "checksum cfg-if 0.1.10 (registry+https://github.com/rust-lang/crates.io-index)" = "4785bdd1c96b2a846b2bd7cc02e86b6b3dbf14e7e53446c4f54c92a361040822"
 "checksum lazy_static 1.4.0 (registry+https://github.com/rust-lang/crates.io-index)" = "e2abad23fbc42b3700f2f279844dc832adb2b2eb069b2df918f455c4e18cc646"
 "checksum libc 0.2.66 (registry+https://github.com/rust-lang/crates.io-index)" = "d515b1f41455adea1313a4a2ac8a8a477634fbae63cc6100e3aebb207ce61558"
-"checksum llvm-sys 90.0.0 (registry+https://github.com/rust-lang/crates.io-index)" = "191f83195c348af813546379e057429b13f5f2009896d45c52a1235ede6d2b84"
+"checksum llvm-sys 100.0.1 (registry+https://github.com/rust-lang/crates.io-index)" = "df29b4f2f4e8a5f7871ccad859aa17a171ba251da96bfd55224d53f48a96d2a2"
 "checksum logos 0.10.0-rc2 (registry+https://github.com/rust-lang/crates.io-index)" = "e136962e0902a48fd1d8da8706fac078fdba547bf82f9d9d728cf551d367b41e"
 "checksum logos-derive 0.10.0-rc2 (registry+https://github.com/rust-lang/crates.io-index)" = "5f03ecd1d993aacc6c4f3a9540e60a4f3811ddac2276dbb66dad4d42671bd5bf"
 "checksum memchr 2.3.2 (registry+https://github.com/rust-lang/crates.io-index)" = "53445de381a1f436797497c61d851644d0e8e88e6140f22872ad33a704933978"

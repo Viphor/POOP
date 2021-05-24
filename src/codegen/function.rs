@@ -284,7 +284,7 @@ impl Function {
         self.build_phi(Types::Int, incoming)
     }
 
-    pub fn build(&mut self, builder: &dyn Fn(&mut Function) -> ()) {
+    pub fn build(&mut self, builder: &dyn Fn(&mut Function)) {
         builder(self);
 
         #[cfg(feature = "codegen-debug")]

@@ -1,3 +1,6 @@
+//! # Parser
+//! This parser uses an LL strategy along with Pratt parsing.
+//!
 //! The syntax used in this parser is as follows:
 //!
 //! ``` EBNF
@@ -88,13 +91,16 @@ use std::iter::Peekable;
 use std::str;
 
 pub mod ast;
+pub mod converter;
 pub mod error;
 
 #[cfg(test)]
 mod test;
 
+/// Short hand type of result that returns a `ParserError`
 pub type Output<Out = ()> = Result<Out, error::ParserError>;
 
+/// Parser that contains the current state of the parsing
 pub struct Parser<'source, Source>
 where
     Source: logos::source::Source<'source> + Copy,
@@ -109,6 +115,9 @@ impl<'source, Source> Parser<'source, Source>
 where
     Source: self::Source<'source> + Copy,
 {
+    /// Creates a new Parser
+    /// `lexer` is the wrapped lexer
+    /// `range_converter` is the converter over the same input as the lexer
     pub fn new(
         lexer: LexerWrapper<Source>,
         range_converter: RangeConverter,
@@ -121,6 +130,7 @@ where
         }
     }
 
+    /// Parses the contained lexed file into a [`ast::Program`] or an error [`error::ParserError`]
     pub fn parse(&mut self) -> Output<ast::Program> {
         self.program()
         //if let Some(token_item) = self.lexer.peek() {
@@ -149,7 +159,7 @@ where
         match self.peek_token() {
             Token::Fn | Token::Let => Ok(ast::Program::Decl(
                 self.decl()?,
-                ast::ProgramContainer::new({ self.program()? }),
+                ast::ProgramContainer::new(self.program()?),
             )),
             Token::End => Ok(ast::Program::Empty),
             token => Err(error::ParserError::expected(

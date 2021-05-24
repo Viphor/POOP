@@ -4,105 +4,149 @@ use std::ops::Range;
 
 pub mod wrapper;
 
+/// Denotes all the possible tokens in the lexer
 #[derive(Logos, Debug, PartialEq, Eq, Clone, Copy)]
 pub enum Token {
     // Logos specific
+    /// EOF
     #[end]
     End,
+    /// Error occured in the lexer
     #[error]
     Error,
 
     // Comments
+    /// Line comment starting with `//` and ends at a new line
     #[regex = "//[^\n]*\n"]
     LineComment,
 
     // Special characters
+    /// Token `(`
     #[token = "("]
     LParen,
+    /// Token `)`
     #[token = ")"]
     RParen,
+    /// Token `{`
     #[token = "{"]
     LBrace,
+    /// Token `}`
     #[token = "}"]
     RBrace,
+    /// Token `[`
     #[token = "["]
     LBracket,
+    /// Token `]`
     #[token = "]"]
     RBracket,
+    /// Token `.`
     #[token = "."]
     Period,
+    /// Token `,`
     #[token = ","]
     Comma,
+    /// Token `;`
     #[token = ";"]
     Semicolon,
+    /// Token `:`
     #[token = ":"]
     Colon,
+    /// Token `->`
     #[token = "->"]
     Arrow,
+    /// Token `+`
     #[token = "+"]
     Plus,
+    /// Token `-`
     #[token = "-"]
     Minus,
+    /// Token `*`
     #[token = "*"]
     Star,
+    /// Token `/`
     #[token = "/"]
     Slash,
+    /// Token `%`
     #[token = "%"]
     Percent,
+    /// Token `=`
     #[token = "="]
     Equal,
+    /// Token `==`
     #[token = "=="]
     Equality,
+    /// Token `!=`
     #[token = "!="]
     NotEq,
+    /// Token `<`
     #[token = "<"]
     LessThan,
+    /// Token `>`
     #[token = ">"]
     GreaterThan,
+    /// Token `<=`
     #[token = "<="]
     LessEq,
+    /// Token `>=`
     #[token = ">="]
     GreaterEq,
+    /// Token `!`
     #[token = "!"]
     Not,
+    /// Token `&&`
     #[token = "&&"]
     And,
+    /// Token `||`
     #[token = "||"]
     Or,
 
     // Identifier
+    /// Identifier, denoted by the regex `[a-zA-Z_][a-zA-Z0-9_]*`
     #[regex = "[a-zA-Z_][a-zA-Z0-9_]*"]
     Ident,
 
     // Keywords
+    /// Keyword `fn`
     #[token = "fn"]
     Fn,
+    /// Keyword `let`
     #[token = "let"]
     Let,
+    /// Keyword `if`
     #[token = "if"]
     If,
+    /// Keyword `else`
     #[token = "else"]
     Else,
 
     // Literals
+    /// Literal for integers
     #[regex = "[0-9][0-9_]*"]
     Int,
+    /// Literal for boolean true
     #[token = "true"]
     True,
+    /// Literal for boolean false
     #[token = "false"]
     False,
+    /// Literal for strings
     #[regex = "\"[^\"]*\""]
     String,
 
     // Type names
+    /// Type `int`
     #[token = "int"]
     IntType,
+    /// Type `float`
     #[token = "float"]
     FloatType,
+    /// Type `double`
     #[token = "double"]
     DoubleType,
+    /// Type `bool`
     #[token = "bool"]
     BooleanType,
+    /// Type `void`
     #[token = "void"]
     VoidType,
 }
@@ -157,6 +201,7 @@ impl fmt::Display for Token {
     }
 }
 
+/// Collection of tokens
 pub struct Tokens(Vec<Token>);
 
 impl From<Vec<Token>> for Tokens {
@@ -184,9 +229,11 @@ impl fmt::Display for Tokens {
 #[cfg(test)]
 mod test;
 
+/// Converts from a token range into a character location in terms of (line, column)
 pub struct RangeConverter(Vec<Range<usize>>);
 
 impl RangeConverter {
+    /// In order to be able to convert a range, we need to first parse the input for which character is on which line
     pub fn new(input: &str) -> Self {
         let mut list = Vec::new();
         let mut last_char = 0;
@@ -198,6 +245,7 @@ impl RangeConverter {
         Self(list)
     }
 
+    /// Converts from a range into a (line, column) tuple
     pub fn to_line_and_pos(&self, range: Range<usize>) -> (usize, usize) {
         for (i, line) in self.0.iter().enumerate() {
             if line.contains(&range.start) {

@@ -1,34 +1,51 @@
+//! This module contains the structures needed to form the Abstract Syntax Tree (AST)
+//! formed by the [`Parser`] (see for EBNF).
+
 use super::error::ParserError;
 use super::Output;
 use super::Parser;
 use super::Source;
 use super::{Token, Tokens};
+use std::fmt;
 use std::ops::Deref;
 use std::str;
 
+/// Wrapper type to help get around recursive types
 pub type ProgramContainer = Box<Program>;
 
+/// The top level node in the AST.
 #[derive(Debug, PartialEq)]
 pub enum Program {
+    /// Top level declaration, and compounded with the rest of the program
     Decl(Decl, ProgramContainer),
+    /// Empty also represents the end of the program
     Empty,
 }
 
+/// Enum of all the types of top level declarations
 #[derive(Debug, PartialEq)]
 pub enum Decl {
+    /// Variable Declaration
     VarDecl(VarDecl),
+    /// Function Declaration
     FuncDecl(FuncDecl),
 }
 
+/// Function declaration
 #[derive(Debug, PartialEq)]
 pub struct FuncDecl {
+    /// Name of the function
     pub name: String,
+    /// Arguments of the function
     pub args: Vec<ArgDecl>,
+    /// Return type of the function
     pub return_type: Type,
+    /// Body of the function
     pub body: Block,
 }
 
 impl FuncDecl {
+    /// Creates a new function declaration
     pub fn new(name: &str, args: Vec<ArgDecl>, return_type: Type, body: Block) -> Self {
         Self {
             name: name.to_string(),
@@ -39,13 +56,17 @@ impl FuncDecl {
     }
 }
 
+/// Argument declaration
 #[derive(Debug, PartialEq)]
 pub struct ArgDecl {
+    /// Name of the argument
     pub name: String,
+    /// Type of the argument
     pub arg_type: Type,
 }
 
 impl ArgDecl {
+    /// Creates a new argument declaration
     pub fn new(name: &str, arg_type: Type) -> Self {
         Self {
             name: name.to_string(),
@@ -54,15 +75,38 @@ impl ArgDecl {
     }
 }
 
+/// Enum of all the built in types.
+/// This also allows for a user defined type
 #[derive(Clone, Debug, PartialEq)]
 pub enum Type {
+    /// Integer (currently the size of [`isize`])
     Int,
+    /// Float (currently the size of [`f32`]
     Float,
+    /// Double (currently the size of [`f64`]
     Double,
+    /// Boolean
     Boolean,
+    /// String
     String,
+    /// Void, representing nothing
     Void,
+    /// User defined type. Uses a string to identify the name
     UserDefined(String),
+}
+
+impl fmt::Display for Type {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Type::Int => write!(f, "int"),
+            Type::Float => write!(f, "float"),
+            Type::Double => write!(f, "double"),
+            Type::Boolean => write!(f, "boolean"),
+            Type::String => write!(f, "string"),
+            Type::Void => write!(f, "void"),
+            Type::UserDefined(name) => write!(f, "{}", name),
+        }
+    }
 }
 
 impl<'source, Source> From<&mut Parser<'source, Source>> for Type
@@ -93,14 +137,20 @@ where
     }
 }
 
-#[derive(Debug, PartialEq)]
+/// Enum representing Statements
+#[derive(Debug, PartialEq, Clone)]
 pub enum Statement {
+    /// Variable declaration
     VarDecl(VarDecl),
+    /// Expression. Currently most things are expresssions
     Expression(Expression),
+    /// Empty statement.
+    /// The reason for this to exist is to enable having an empty last expression
+    /// like you would find in Rust
     Empty,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct Block(Vec<Statement>);
 
 impl Block {
@@ -117,7 +167,7 @@ impl Deref for Block {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct VarDecl {
     pub identifier: String,
     pub expression: Expression,
@@ -134,7 +184,7 @@ impl VarDecl {
 
 pub type ExpressionContainer = Box<Expression>;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum Expression {
     Addition(ExpressionContainer, ExpressionContainer),
     Subtraction(ExpressionContainer, ExpressionContainer),
@@ -259,7 +309,7 @@ impl Expression {
 
 pub type IfExpressionContainer = Box<IfExpression>;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct IfExpression {
     pub condition: Expression,
     pub body: Block,
@@ -276,39 +326,28 @@ impl IfExpression {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum ElseExpression {
     Block(Block),
     IfExpression(IfExpressionContainer),
     None,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum Value {
     Literal(Literal),
     Variable(String),
     FunctionCall(FunctionCall),
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum Literal {
     Number(Number),
     Boolean(bool),
     String(String),
 }
 
-//impl From<Token> for Literal {
-//    fn from(token: Token) -> Self {
-//        match token {
-//            Token::Int | Token::Minus => Literal::Number(token.into()),
-//            Token::True => Literal::Boolean(true),
-//            Token::False => Literal::Boolean(false),
-//            _ => panic!("Expected: number or boolean in parsing of Literal"),
-//        }
-//    }
-//}
-
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct FunctionCall {
     pub name: String,
     pub arguments: Vec<Expression>,
@@ -323,7 +362,7 @@ impl FunctionCall {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum Number {
     Int(isize),
     Float(f32),

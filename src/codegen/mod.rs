@@ -1,3 +1,5 @@
+//! This module takes care of converting the AST into llvm IR
+
 use crate::parser::ast::*;
 #[cfg(feature = "codegen-debug")]
 use llvm::analysis::*;
